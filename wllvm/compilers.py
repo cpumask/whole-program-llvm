@@ -166,7 +166,7 @@ def attachBitcodePathToObject(bcPath, outFileName):
 
     if orc != 0:
         _logger.error('objcopy failed with %s', orc)
-        sys.exit(-1)
+        #sys.exit(-1)
 
 class BuilderBase(object):
     def __init__(self, cmd, mode, prefixPath=None):
@@ -359,6 +359,20 @@ def buildBitcodeFile(builder, srcFile, bcFile):
     bcc.extend(af.compileArgs)
     bcc.extend(['-c', srcFile])
     bcc.extend(['-o', bcFile])
+    #hz: we try to give users the opportunity to specify a different opt level (than that used in the original cmd) for bc generation,
+    #since lower opt level will in general make the program analysis easier.
+    uopt = os.getenv('WLLVM_BC_OPT_LVL')
+    if uopt and af.opt and uopt <> af.opt:
+        #Try to replace the original opt level w/ the user specified one.
+        _logger.debug('buildBitcodeFile: try to replace original opt level w/ user supplied one: %s -> %s', af.opt, uopt)
+        n_bcc = [x if x <> af.opt else uopt for x in bcc]
+        _logger.debug('buildBitcodeFile: (uopt) %s', n_bcc)
+        if Popen(n_bcc).wait() == 0:
+            #Succeed!
+            return
+        else:
+            _logger.debug('buildBitcodeFile: failed to generate bc w/ user opt level! Just try w/ the original level...')
+    #Either there is no special user specified opt level or we failed to generate bc by that level, so just proceed as normal.
     _logger.debug('buildBitcodeFile: %s', bcc)
     proc = Popen(bcc)
     rc = proc.wait()

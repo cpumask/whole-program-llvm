@@ -98,6 +98,8 @@ class ArgumentListFilter(object):
             '-mno-fp-ret-in-387': (0, ArgumentListFilter.compileUnaryCallback),          #iam: linux kernel stuff
             '-mskip-rax-setup': (0, ArgumentListFilter.compileUnaryCallback),            #iam: linux kernel stuff
             '-mindirect-branch-register': (0, ArgumentListFilter.compileUnaryCallback),  #iam: linux kernel stuff
+            '-mlittle-endian': (0, ArgumentListFilter.compileUnaryCallback),  #hz: linux kernel stuff
+            '-mno-implicit-float': (0, ArgumentListFilter.compileUnaryCallback),  #hz: linux kernel stuff
             # Preprocessor assertion
             '-A' : (1, ArgumentListFilter.compileBinaryCallback),
             '-D' : (1, ArgumentListFilter.compileBinaryCallback),
@@ -160,14 +162,14 @@ class ArgumentListFilter(object):
             '-pg' : (0, ArgumentListFilter.compileUnaryCallback),
 
             # Optimization
-            '-O' : (0, ArgumentListFilter.compileUnaryCallback),
-            '-O0' : (0, ArgumentListFilter.compileUnaryCallback),
-            '-O1' : (0, ArgumentListFilter.compileUnaryCallback),
-            '-O2' : (0, ArgumentListFilter.compileUnaryCallback),
-            '-O3' : (0, ArgumentListFilter.compileUnaryCallback),
-            '-Os' : (0, ArgumentListFilter.compileUnaryCallback),
-            '-Ofast' : (0, ArgumentListFilter.compileUnaryCallback),
-            '-Og' : (0, ArgumentListFilter.compileUnaryCallback),
+            '-O' : (0, ArgumentListFilter.compileOptCallback),
+            '-O0' : (0, ArgumentListFilter.compileOptCallback),
+            '-O1' : (0, ArgumentListFilter.compileOptCallback),
+            '-O2' : (0, ArgumentListFilter.compileOptCallback),
+            '-O3' : (0, ArgumentListFilter.compileOptCallback),
+            '-Os' : (0, ArgumentListFilter.compileOptCallback),
+            '-Ofast' : (0, ArgumentListFilter.compileOptCallback),
+            '-Og' : (0, ArgumentListFilter.compileOptCallback),
             # Component-specifiers
             '-Xclang' : (1, ArgumentListFilter.compileBinaryCallback),
             '-Xpreprocessor' : (1, ArgumentListFilter.defaultBinaryCallback),
@@ -271,6 +273,7 @@ class ArgumentListFilter(object):
             r'^-mregparm=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                            #iam: linux kernel stuff
             r'^-march=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                               #iam: linux kernel stuff
             r'^--param=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                              #iam: linux kernel stuff
+            r'^-Werror*$' : (0, ArgumentListFilter.werrorCallback),                                      #hz: we'd better disable this bad guy
 
 
             #iam: mac stuff...
@@ -296,6 +299,8 @@ class ArgumentListFilter(object):
         self.linkArgs = []
         # currently only dead_strip belongs here; but I guess there could be more.
         self.forbiddenArgs = []
+        #hz: record the opt level option (e.g. -O2)
+        self.opt = None
 
 
         self.isVerbose = False
@@ -340,7 +345,7 @@ class ArgumentListFilter(object):
                 # If no action has been specified, this is a zero-argument
                 # flag that we should just keep.
                 if not matched:
-                    _logger.warning('Did not recognize the compiler flag "%s"', currentItem)
+                    # _logger.warning('Did not recognize the compiler flag "%s"', currentItem)
                     self.compileUnaryCallback(currentItem)
 
         if DUMPING:
@@ -430,9 +435,20 @@ class ArgumentListFilter(object):
         _logger.debug('compileUnaryCallback: %s', flag)
         self.compileArgs.append(flag)
 
+    #hz: we want to record the opt level here, besides just processing it as a normal Unary option.
+    def compileOptCallback(self, flag):
+        _logger.debug('compileOptCallback: %s', flag)
+        self.compileUnaryCallback(flag)
+        self.opt = flag
+
     def warningLinkUnaryCallback(self, flag):
         _logger.debug('warningLinkUnaryCallback: %s', flag)
         _logger.warning('The flag "%s" cannot be used with this tool; we are ignoring it', flag)
+        self.forbiddenArgs.append(flag)
+
+    #hz: try best to make the compilation successful...
+    def werrorCallback(self, flag):
+        _logger.debug('werrorCallback: %s', flag)
         self.forbiddenArgs.append(flag)
 
     def defaultBinaryCallback(self, flag, arg):
