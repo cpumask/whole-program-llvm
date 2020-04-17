@@ -9,6 +9,7 @@ _logger = logging.getLogger(__name__)
 
 # Flag for dumping
 DUMPING = False
+DEBUG = False
 
 # This class applies filters to GCC argument lists.  It has a few
 # default arguments that it records, but does not modify the argument
@@ -258,8 +259,10 @@ class ArgumentListFilter(object):
             r'^-I.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-D.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-U.+$' : (0, ArgumentListFilter.compileUnaryCallback),
+            r'^-Werror.*$' : (0, ArgumentListFilter.werrorCallback),                                     #hz: we'd better disable this bad guy
             r'^-Wl,.+$' : (0, ArgumentListFilter.linkUnaryCallback),
-            r'^-W(?!l,).*$' : (0, ArgumentListFilter.compileUnaryCallback),
+            r'^-W(?!(l,|error)).*$' : (0, ArgumentListFilter.compileUnaryCallback),
+            #r'^-W(?!l,).*$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-fsanitize=.+$' : (0, ArgumentListFilter.compileLinkUnaryCallback),
             r'^-f.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-rtlib=.+$' : (0, ArgumentListFilter.linkUnaryCallback),
@@ -273,7 +276,6 @@ class ArgumentListFilter(object):
             r'^-mregparm=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                            #iam: linux kernel stuff
             r'^-march=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                               #iam: linux kernel stuff
             r'^--param=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                              #iam: linux kernel stuff
-            r'^-Werror*$' : (0, ArgumentListFilter.werrorCallback),                                      #hz: we'd better disable this bad guy
 
 
             #iam: mac stuff...
@@ -301,6 +303,8 @@ class ArgumentListFilter(object):
         self.forbiddenArgs = []
         #hz: record the opt level option (e.g. -O2)
         self.opt = None
+        #hz: record all -Werror* options, we may choose to disable all of them to increase the compilation success probability.
+        self.werrorArgs = []
 
 
         self.isVerbose = False
@@ -319,6 +323,8 @@ class ArgumentListFilter(object):
 
         self._inputArgs = collections.deque(inputList)
 
+        if DEBUG:
+            sys.stderr.write('\ninputList: ' + str(inputList) + '\n')
         #iam: parse the cmd line, bailing if we discover that there will be no second phase.
         while (self._inputArgs   and
                not (self.isAssembly or
@@ -326,6 +332,8 @@ class ArgumentListFilter(object):
                     self.isPreprocessOnly)):
             # Get the next argument
             currentItem = self._inputArgs.popleft()
+            if DEBUG:
+                sys.stderr.write('currentItem: ' + currentItem + '\n')
             _logger.debug('Trying to match item %s', currentItem)
             # First, see if this exact flag has a handler in the table.
             # This is a cheap test.  Otherwise, see if the input matches
@@ -338,6 +346,8 @@ class ArgumentListFilter(object):
                 matched = False
                 for pattern, (arity, handler) in argPatterns.items():
                     if re.match(pattern, currentItem):
+                        if currentItem == '-Wno-frame-address':
+                           sys.stderr.write('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'+str(pattern))
                         flagArgs = self._shiftArgs(arity)
                         handler(self, currentItem, *flagArgs)
                         matched = True
@@ -345,6 +355,8 @@ class ArgumentListFilter(object):
                 # If no action has been specified, this is a zero-argument
                 # flag that we should just keep.
                 if not matched:
+                    if currentItem == '-Wno-frame-address':
+                        sys.stderr.write('###########NO MATCH')
                     # _logger.warning('Did not recognize the compiler flag "%s"', currentItem)
                     self.compileUnaryCallback(currentItem)
 
@@ -449,7 +461,8 @@ class ArgumentListFilter(object):
     #hz: try best to make the compilation successful...
     def werrorCallback(self, flag):
         _logger.debug('werrorCallback: %s', flag)
-        self.forbiddenArgs.append(flag)
+        self.compileUnaryCallback(flag)
+        self.werrorArgs.append(flag)
 
     def defaultBinaryCallback(self, flag, arg):
         _logger.warning('Ignoring compiler arg pair: "%s %s"', flag, arg)
@@ -506,10 +519,18 @@ class ArgumentListFilter(object):
         bcbase = '.{0}.o.bc'.format(srcroot)
         return [objbase, bcbase]
 
+    # HZ: return the options used for compilation, if werror = False the -Werror* options will be excluded.
+    def getCompileArgs(self, werror = True):
+        args = list(self.compileArgs)
+        if not werror:
+            for we in self.werrorArgs:
+                args.remove(we)
+        return args
+
     #iam: for printing our partitioning of the args
     def dump(self):
         efn = sys.stderr.write
-        efn('\ncompileArgs: {0}\ninputFiles: {1}\nlinkArgs: {2}\n'.format(self.compileArgs, self.inputFiles, self.linkArgs))
+        efn('\ncompileArgs: {0}\ninputFiles: {1}\nlinkArgs: {2}\nforbiddenArgs: {3}\n'.format(self.compileArgs, self.inputFiles, self.linkArgs, self.forbiddenArgs))
         efn('\nobjectFiles: {0}\noutputFilename: {1}\n'.format(self.objectFiles, self.outputFilename))
         for srcFile in self.inputFiles:
             efn('\nsrcFile: {0}\n'.format(srcFile))

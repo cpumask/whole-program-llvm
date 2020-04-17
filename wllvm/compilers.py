@@ -17,6 +17,13 @@ from .logconfig import logConfig
 # Internal logger
 _logger = logConfig(__name__)
 
+DEBUG = False
+
+def run(cmd):
+    proc = Popen(cmd)
+    rc = proc.wait()
+    return rc
+
 def wcompile(mode):
     """ The workhorse, called from wllvm and wllvm++.
     """
@@ -36,7 +43,7 @@ def wcompile(mode):
 
         af = builder.getBitcodeArglistFilter()
 
-        rc = buildObject(builder)
+        rc = builder.buildObject()
 
         # phase one compile failed. no point continuing
         if rc != 0:
@@ -58,9 +65,6 @@ def wcompile(mode):
 
     _logger.debug('Calling %s returned %d', list(sys.argv), rc)
     return rc
-
-
-
 
 fullSelfPath = os.path.realpath(__file__)
 prefix = os.path.dirname(fullSelfPath)
@@ -185,9 +189,15 @@ class BuilderBase(object):
                 errorMsg = 'Path to compiler "%s" does not exist'
                 _logger.error(errorMsg, self.prefixPath)
                 raise Exception(errorMsg)
-
         else:
             self.prefixPath = ''
+
+        # HZ: Record the raw compiler used before wllvm replacement, if any.
+        self.raw_compiler = os.getenv('WLLVM_RAW_COMPILER')
+        # HZ: Record the user expected optmization level for the "bc", if any.  
+        # we try to give users the opportunity to specify a different opt level (than that used in the original cmd) for bc generation,
+        # since lower opt level will in general make the program analysis easier.
+        self.uopt = os.getenv('WLLVM_BC_OPT_LVL')
 
     def getCommand(self):
         if self.af is not None:
@@ -198,6 +208,67 @@ class BuilderBase(object):
                     self.cmd.remove(baddy)
         return self.cmd
 
+    def getCompiler(self):
+        raise NotImplementedError
+
+    def getBitcodeCompiler(self):
+        raise NotImplementedError
+
+    def getBitcodeArglistFilter(self):
+        raise NotImplementedError
+
+    #HZ:
+    #Basically this will replay the very original compiler cmd (i.e. before we replace gcc/clang w/ wllvm),
+    #but we may remove some options (e.g. -Werror) from the original cmd (i.e. those in self.af.forbiddenArgs).
+    #NOTE that here we may not know the original compiler used before wllvm replacement, what we can do is:
+    #(1) We don't use the original compiler before replacement (e.g. gcc), instead we use the user-specified compiler (e.g. clang),
+    #whose goal is actually to build the "bc" not the real object files, that's to say, this cmd may not work due to compiler/opt incompatibility.
+    #(2) The user specified the original compiler via the ENV var "WLLVM_RAW_COMPILER", so we can use the same compiler to replay.
+    def buildObject(self):
+        objCompiler = [self.raw_compiler] if self.raw_compiler else self.getCompiler() 
+        objCompiler.extend(self.getCommand())
+        rc = run(objCompiler)
+        _logger.debug('Builder::buildObject rc = %d', rc)
+        return rc
+
+    #HZ: instead of replaying the whole compile cmd, we can select one src file and obj file from multiple files involved in the original cmd
+    #and execute the same cmd to get separate files.
+    def buildObjectFile(self, srcFile, objFile):
+        af = self.getBitcodeArglistFilter()
+        cc = [self.raw_compiler] if self.raw_compiler else self.getCompiler()
+        cc.extend(af.compileArgs)
+        cc.append(srcFile)
+        cc.extend(['-c', '-o', objFile])
+        _logger.debug('Builder::buildObjectFile: %s', cc)
+        rc = run(cc)
+        if rc != 0:
+            _logger.warning('Failed to generate object "%s" for "%s"', objFile, srcFile)
+            sys.exit(rc)
+
+    #Build the bc that we really want...
+    def buildBitcodeFile(self, srcFile, bcFile):
+        af = self.getBitcodeArglistFilter()
+        bcc = self.getBitcodeCompiler()
+        #HZ: here we disable all -Werror* options to try best to get the bc.
+        bcc.extend(af.getCompileArgs(False))
+        bcc.extend(['-c', srcFile])
+        bcc.extend(['-o', bcFile])
+        if self.uopt and af.opt and self.uopt <> af.opt:
+            #Try to replace the original opt level w/ the user specified one.
+            _logger.debug('buildBitcodeFile: try to replace original opt level w/ user supplied one: %s -> %s', af.opt, self.uopt)
+            n_bcc = [x if x <> af.opt else self.uopt for x in bcc]
+            _logger.debug('buildBitcodeFile: (uopt) %s', n_bcc)
+            if run(n_bcc) == 0:
+                #Succeed!
+                return
+            else:
+                _logger.debug('buildBitcodeFile: failed to generate bc w/ user opt level! Just try w/ the original level...')
+        #Either there is no special user specified opt level or we failed to generate bc by that level, so just proceed as normal.
+        _logger.debug('buildBitcodeFile: %s', bcc)
+        rc = run(bcc)
+        if rc != 0:
+            _logger.warning('Failed to generate bitcode "%s" for "%s"', bcFile, srcFile)
+            sys.exit(rc)
 
 class ClangBuilder(BuilderBase):
 
@@ -282,15 +353,6 @@ def getBuilder(cmd, mode):
         _logger.critical(errorMsg, compilerEnv, str(cstring))
         raise Exception(errorMsg)
 
-def buildObject(builder):
-    objCompiler = builder.getCompiler()
-    objCompiler.extend(builder.getCommand())
-    proc = Popen(objCompiler)
-    rc = proc.wait()
-    _logger.debug('buildObject rc = %d', rc)
-    return rc
-
-
 # This command does not have the executable with it
 def buildAndAttachBitcode(builder, af):
 
@@ -312,7 +374,7 @@ def buildAndAttachBitcode(builder, af):
         if af.outputFilename is not None:
             objFile = af.outputFilename
             bcFile = af.getBitcodeFileName()
-        buildBitcodeFile(builder, srcFile, bcFile)
+        builder.buildBitcodeFile(srcFile, bcFile)
         attachBitcodePathToObject(bcFile, objFile)
 
     else:
@@ -321,7 +383,7 @@ def buildAndAttachBitcode(builder, af):
             _logger.debug('Not compile only case: %s', srcFile)
             (objFile, bcFile) = af.getArtifactNames(srcFile, hidden)
             if hidden:
-                buildObjectFile(builder, srcFile, objFile)
+                builder.buildObjectFile(srcFile, objFile)
                 newObjectFiles.append(objFile)
 
             if srcFile.endswith('.bc'):
@@ -329,7 +391,7 @@ def buildAndAttachBitcode(builder, af):
                 attachBitcodePathToObject(srcFile, objFile)
             else:
                 _logger.debug('building and attaching %s to %s', bcFile, objFile)
-                buildBitcodeFile(builder, srcFile, bcFile)
+                builder.buildBitcodeFile(srcFile, bcFile)
                 attachBitcodePathToObject(bcFile, objFile)
 
 
@@ -350,47 +412,6 @@ def linkFiles(builder, objectFiles):
     rc = proc.wait()
     if rc != 0:
         _logger.warning('Failed to link "%s"', str(cc))
-        sys.exit(rc)
-
-
-def buildBitcodeFile(builder, srcFile, bcFile):
-    af = builder.getBitcodeArglistFilter()
-    bcc = builder.getBitcodeCompiler()
-    bcc.extend(af.compileArgs)
-    bcc.extend(['-c', srcFile])
-    bcc.extend(['-o', bcFile])
-    #hz: we try to give users the opportunity to specify a different opt level (than that used in the original cmd) for bc generation,
-    #since lower opt level will in general make the program analysis easier.
-    uopt = os.getenv('WLLVM_BC_OPT_LVL')
-    if uopt and af.opt and uopt <> af.opt:
-        #Try to replace the original opt level w/ the user specified one.
-        _logger.debug('buildBitcodeFile: try to replace original opt level w/ user supplied one: %s -> %s', af.opt, uopt)
-        n_bcc = [x if x <> af.opt else uopt for x in bcc]
-        _logger.debug('buildBitcodeFile: (uopt) %s', n_bcc)
-        if Popen(n_bcc).wait() == 0:
-            #Succeed!
-            return
-        else:
-            _logger.debug('buildBitcodeFile: failed to generate bc w/ user opt level! Just try w/ the original level...')
-    #Either there is no special user specified opt level or we failed to generate bc by that level, so just proceed as normal.
-    _logger.debug('buildBitcodeFile: %s', bcc)
-    proc = Popen(bcc)
-    rc = proc.wait()
-    if rc != 0:
-        _logger.warning('Failed to generate bitcode "%s" for "%s"', bcFile, srcFile)
-        sys.exit(rc)
-
-def buildObjectFile(builder, srcFile, objFile):
-    af = builder.getBitcodeArglistFilter()
-    cc = builder.getCompiler()
-    cc.extend(af.compileArgs)
-    cc.append(srcFile)
-    cc.extend(['-c', '-o', objFile])
-    _logger.debug('buildObjectFile: %s', cc)
-    proc = Popen(cc)
-    rc = proc.wait()
-    if rc != 0:
-        _logger.warning('Failed to generate object "%s" for "%s"', objFile, srcFile)
         sys.exit(rc)
 
 # bd & iam:
