@@ -259,8 +259,9 @@ class ArgumentListFilter(object):
             r'^-I.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-D.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-U.+$' : (0, ArgumentListFilter.compileUnaryCallback),
-            r'^-Werror.*$' : (0, ArgumentListFilter.werrorCallback),                                     #hz: we'd better disable this bad guy
+            #r'^-Werror.*$' : (0, ArgumentListFilter.werrorCallback),                                     #hz: we'd better disable this bad guy
             r'^-Wl,.+$' : (0, ArgumentListFilter.linkUnaryCallback),
+            #hz: (?!...) means "negative look ahead", basically "..." cannot appear at the current position.
             r'^-W(?!(l,|error)).*$' : (0, ArgumentListFilter.compileUnaryCallback),
             #r'^-W(?!l,).*$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-fsanitize=.+$' : (0, ArgumentListFilter.compileLinkUnaryCallback),
@@ -306,7 +307,6 @@ class ArgumentListFilter(object):
         #hz: record all -Werror* options, we may choose to disable all of them to increase the compilation success probability.
         self.werrorArgs = []
 
-
         self.isVerbose = False
         self.isDependencyOnly = False
         self.isPreprocessOnly = False
@@ -346,8 +346,6 @@ class ArgumentListFilter(object):
                 matched = False
                 for pattern, (arity, handler) in argPatterns.items():
                     if re.match(pattern, currentItem):
-                        if currentItem == '-Wno-frame-address':
-                           sys.stderr.write('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'+str(pattern))
                         flagArgs = self._shiftArgs(arity)
                         handler(self, currentItem, *flagArgs)
                         matched = True
@@ -355,8 +353,6 @@ class ArgumentListFilter(object):
                 # If no action has been specified, this is a zero-argument
                 # flag that we should just keep.
                 if not matched:
-                    if currentItem == '-Wno-frame-address':
-                        sys.stderr.write('###########NO MATCH')
                     # _logger.warning('Did not recognize the compiler flag "%s"', currentItem)
                     self.compileUnaryCallback(currentItem)
 

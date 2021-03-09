@@ -24,6 +24,25 @@ def run(cmd):
     rc = proc.wait()
     return rc
 
+#kick out all options that try to emit extra warnings or turn warnings into errors. 
+def kickWE(cmd):
+    ncmd = []
+    suppress_warns = False
+    for c in cmd:
+        if c.startswith('-Werror'):
+            continue
+        if c == '-Wall':
+            continue
+        if c == '-w':
+            suppress_warns = True
+        ncmd.append(c)
+    cmd *= 0
+    cmd.extend(ncmd)
+    cmd.insert(0,'-Wno-ignored-optimization-argument')
+    cmd.insert(0,'-Wno-unknown-warning-option')
+    if not suppress_warns:
+        cmd.insert(0,'-w')
+
 def wcompile(mode):
     """ The workhorse, called from wllvm and wllvm++.
     """
@@ -38,6 +57,8 @@ def wcompile(mode):
     try:
         cmd = list(sys.argv)
         cmd = cmd[1:]
+
+        kickWE(cmd)
 
         builder = getBuilder(cmd, mode)
 
@@ -177,6 +198,7 @@ class BuilderBase(object):
         self.af = None     #memoize the arglist filter
         self.cmd = cmd
         self.mode = mode
+        self.cmd_filtered = False
 
         # Used as prefix path for compiler
         if prefixPath:
@@ -200,12 +222,18 @@ class BuilderBase(object):
         self.uopt = os.getenv('WLLVM_BC_OPT_LVL')
 
     def getCommand(self):
-        if self.af is not None:
+        if (not self.cmd_filtered) and (self.af is not None):
             # need to remove things like "-dead_strip"
             forbidden = self.af.forbiddenArgs
             if forbidden:
                 for baddy in forbidden:
                     self.cmd.remove(baddy)
+            wes = self.af.werrorArgs
+            if wes:
+                for baddy in wes:
+                    self.cmd.remove(baddy)
+            self.cmd_filtered = True
+            _logger.debug('Builder::getCommand: filter out args [%s]', ' '.join(forbidden + wes))
         return self.cmd
 
     def getCompiler(self):
@@ -227,6 +255,7 @@ class BuilderBase(object):
     def buildObject(self):
         objCompiler = [self.raw_compiler] if self.raw_compiler else self.getCompiler() 
         objCompiler.extend(self.getCommand())
+        _logger.debug('Builder::buildObject: [%s]', ' '.join(objCompiler))
         rc = run(objCompiler)
         _logger.debug('Builder::buildObject rc = %d', rc)
         return rc
@@ -236,9 +265,8 @@ class BuilderBase(object):
     def buildObjectFile(self, srcFile, objFile):
         af = self.getBitcodeArglistFilter()
         cc = [self.raw_compiler] if self.raw_compiler else self.getCompiler()
-        cc.extend(af.compileArgs)
-        cc.append(srcFile)
-        cc.extend(['-c', '-o', objFile])
+        cc.extend(af.getCompileArgs(False))
+        cc.extend(['-c', srcFile, '-o', objFile])
         _logger.debug('Builder::buildObjectFile: %s', cc)
         rc = run(cc)
         if rc != 0:
@@ -251,6 +279,7 @@ class BuilderBase(object):
         bcc = self.getBitcodeCompiler()
         #HZ: here we disable all -Werror* options to try best to get the bc.
         bcc.extend(af.getCompileArgs(False))
+        #Src and dst
         bcc.extend(['-c', srcFile])
         bcc.extend(['-o', bcFile])
         if self.uopt and af.opt and self.uopt <> af.opt:
