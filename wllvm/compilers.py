@@ -39,6 +39,9 @@ def kickWE(cmd):
     cmd *= 0
     cmd.extend(ncmd)
     cmd.insert(0,'-Wno-ignored-optimization-argument')
+    cmd.insert(0,'-Wno-address-of-packed-member')
+    cmd.insert(0,'-Wno-gnu-variable-sized-type-not-at-end')
+    cmd.insert(0,'-Wno-unused-command-line-argument')
     cmd.insert(0,'-Wno-unknown-warning-option')
     if not suppress_warns:
         cmd.insert(0,'-w')
@@ -279,6 +282,8 @@ class BuilderBase(object):
         bcc = self.getBitcodeCompiler()
         #HZ: here we disable all -Werror* options to try best to get the bc.
         bcc.extend(af.getCompileArgs(False))
+        #be sure to generate dbg info..
+        bcc.extend(['-g'])
         #Src and dst
         bcc.extend(['-c', srcFile])
         bcc.extend(['-o', bcFile])
