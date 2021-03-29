@@ -42,6 +42,9 @@ def kickWE(cmd):
     cmd.insert(0,'-Wno-address-of-packed-member')
     cmd.insert(0,'-Wno-gnu-variable-sized-type-not-at-end')
     cmd.insert(0,'-Wno-unused-command-line-argument')
+    cmd.insert(0,'-Wno-format')
+    cmd.insert(0,'-Wno-array-bounds')
+    cmd.insert(0,'-Wno-division-by-zero')
     cmd.insert(0,'-Wno-unknown-warning-option')
     if not suppress_warns:
         cmd.insert(0,'-w')
