@@ -45,6 +45,7 @@ def kickWE(cmd):
     cmd.insert(0,'-Wno-format')
     cmd.insert(0,'-Wno-array-bounds')
     cmd.insert(0,'-Wno-division-by-zero')
+    cmd.insert(0,'-Wno-initializer-overrides')
     cmd.insert(0,'-Wno-unknown-warning-option')
     if not suppress_warns:
         cmd.insert(0,'-w')
@@ -53,7 +54,7 @@ def wcompile(mode):
     """ The workhorse, called from wllvm and wllvm++.
     """
 
-    rc = 1
+    rc = 0
 
     legible_argstring = ' '.join(list(sys.argv)[1:])
 
