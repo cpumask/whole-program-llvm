@@ -53,9 +53,6 @@ def kickWE(cmd):
 def wcompile(mode):
     """ The workhorse, called from wllvm and wllvm++.
     """
-
-    rc = 0
-
     legible_argstring = ' '.join(list(sys.argv)[1:])
 
     # for diffing with gclang
@@ -76,6 +73,12 @@ def wcompile(mode):
         # phase one compile failed. no point continuing
         if rc != 0:
             _logger.error('Failed to compile using given arguments: [%s]', legible_argstring)
+            #This is the only case where we should return non-zero. The return value will be treated by the
+            #original compilation process (e.g., make) as an indicator of success or not, here since we even
+            #cannot compile w/ the raw compiler, we must faithfully return the error which will lead to the
+            #termination of the whole compilation process, however, as long as the raw compiler works,
+            #even later we cannot generate the "bc" file with clang, we will not return errors. (i.e., the bc
+            #generation is best-effort).
             return rc
 
         # no need to generate bitcode (e.g. configure only, assembly, ....)
@@ -83,16 +86,16 @@ def wcompile(mode):
         if skipit:
             _logger.debug('No work to do: %s', reason)
             _logger.debug(af.__dict__)
-            return rc
+            return 0
 
         # phase two
-        buildAndAttachBitcode(builder, af)
+        #if rc is non-zero, that means bc generation failed, however we still return 0 to the original compilation process.
+        rc = buildAndAttachBitcode(builder, af)
 
     except Exception as e:
         _logger.warning('%s: exception case: %s', mode, str(e))
 
-    _logger.debug('Calling %s returned %d', list(sys.argv), rc)
-    return rc
+    return 0
 
 fullSelfPath = os.path.realpath(__file__)
 prefix = os.path.dirname(fullSelfPath)
@@ -145,7 +148,7 @@ def attachBitcodePathToObject(bcPath, outFileName):
     if fileType not in (FileType.MACH_OBJECT, FileType.ELF_OBJECT):
     #if fileType not in (FileType.MACH_OBJECT, FileType.MACH_SHARED, FileType.ELF_OBJECT, FileType.ELF_SHARED):
         _logger.warning('Cannot attach bitcode path to "%s of type %s"', outFileName, FileType.getFileTypeString(fileType))
-        return
+        return 0
 
     #iam: this also looks very dodgey; we need a more reliable way to do this:
     #if ext not in ('.o', '.lo', '.os', '.So', '.po'):
@@ -192,13 +195,11 @@ def attachBitcodePathToObject(bcPath, outFileName):
         # configure loves to immediately delete things, causing issues for
         # us here.  Just ignore it
         os.remove(f.name)
-        sys.exit(0)
-
+        return 0
     os.remove(f.name)
-
     if orc != 0:
         _logger.error('objcopy failed with %s', orc)
-        #sys.exit(-1)
+    return 0
 
 class BuilderBase(object):
     def __init__(self, cmd, mode, prefixPath=None):
@@ -262,9 +263,8 @@ class BuilderBase(object):
     def buildObject(self):
         objCompiler = [self.raw_compiler] if self.raw_compiler else self.getCompiler() 
         objCompiler.extend(self.getCommand())
-        _logger.debug('Builder::buildObject: [%s]', ' '.join(objCompiler))
         rc = run(objCompiler)
-        _logger.debug('Builder::buildObject rc = %d', rc)
+        _logger.debug('Builder::buildObject: [%s], rc = %d', ' '.join(objCompiler), rc)
         return rc
 
     #HZ: instead of replaying the whole compile cmd, we can select one src file and obj file from multiple files involved in the original cmd
@@ -274,11 +274,11 @@ class BuilderBase(object):
         cc = [self.raw_compiler] if self.raw_compiler else self.getCompiler()
         cc.extend(af.getCompileArgs(False))
         cc.extend(['-c', srcFile, '-o', objFile])
-        _logger.debug('Builder::buildObjectFile: %s', cc)
         rc = run(cc)
+        _logger.debug('Builder::buildObjectFile: [%s], rc = %d', ' '.join(cc), rc)
         if rc != 0:
             _logger.warning('Failed to generate object "%s" for "%s"', objFile, srcFile)
-            sys.exit(rc)
+        return rc
 
     #Build the bc that we really want...
     def buildBitcodeFile(self, srcFile, bcFile):
@@ -293,20 +293,19 @@ class BuilderBase(object):
         bcc.extend(['-o', bcFile])
         if self.uopt and af.opt and self.uopt <> af.opt:
             #Try to replace the original opt level w/ the user specified one.
-            _logger.debug('buildBitcodeFile: try to replace original opt level w/ user supplied one: %s -> %s', af.opt, self.uopt)
+            _logger.debug('Builder::buildBitcodeFile: try to replace original opt level w/ user supplied one: %s -> %s', af.opt, self.uopt)
             n_bcc = [x if x <> af.opt else self.uopt for x in bcc]
-            _logger.debug('buildBitcodeFile: (uopt) %s', n_bcc)
-            if run(n_bcc) == 0:
+            rc = run(n_bcc)
+            _logger.debug('Builder::buildBitcodeFile: [%s], rc = %d', ' '.join(n_bcc), rc)
+            if rc == 0:
                 #Succeed!
-                return
-            else:
-                _logger.debug('buildBitcodeFile: failed to generate bc w/ user opt level! Just try w/ the original level...')
+                return 0
         #Either there is no special user specified opt level or we failed to generate bc by that level, so just proceed as normal.
-        _logger.debug('buildBitcodeFile: %s', bcc)
         rc = run(bcc)
+        _logger.debug('Builder::buildBitcodeFile (failsafe try): [%s], rc = %d', ' '.join(bcc), rc)
         if rc != 0:
             _logger.warning('Failed to generate bitcode "%s" for "%s"', bcFile, srcFile)
-            sys.exit(rc)
+        return rc
 
 class ClangBuilder(BuilderBase):
 
@@ -393,14 +392,10 @@ def getBuilder(cmd, mode):
 
 # This command does not have the executable with it
 def buildAndAttachBitcode(builder, af):
-
-    #iam: when we have multiple input files we'll have to keep track of their object files.
-    newObjectFiles = []
-
     hidden = not af.isCompileOnly
-
+    rc = 0
     if  len(af.inputFiles) == 1 and af.isCompileOnly:
-        _logger.debug('Compile only case: %s', af.inputFiles[0])
+        _logger.debug('Single src no linking case: %s', af.inputFiles[0])
         # iam:
         # we could have
         # "... -c -o foo.o" or even "... -c -o foo.So" which is OK, but we could also have
@@ -412,31 +407,49 @@ def buildAndAttachBitcode(builder, af):
         if af.outputFilename is not None:
             objFile = af.outputFilename
             bcFile = af.getBitcodeFileName()
-        builder.buildBitcodeFile(srcFile, bcFile)
-        attachBitcodePathToObject(bcFile, objFile)
-
+        rc = builder.buildBitcodeFile(srcFile, bcFile)
+        if rc == 0:
+            attachBitcodePathToObject(bcFile, objFile)
     else:
-
+        #iam: when we have multiple input files we'll have to keep track of their object files.
+        newObjectFiles = []
+        #For each individual src file, generate its bc and attach it to its obj file, the latter is either generated
+        #by ourselves for each single src file, or by the raw compilation process.
         for srcFile in af.inputFiles:
-            _logger.debug('Not compile only case: %s', srcFile)
+            _logger.debug('Need linking, processing src: %s', srcFile)
+            #Basically suffix the src w/ ".o" and ".bc", "hidden" determines whether it's ".src.o" or "src.o".
+            #If this is not compile-only (which means potentially multiple src will be linked to one ".o"),
+            #the original compilation process may not generate "src.o" for this src (instead a unified ".o" for multiple src),
+            #so we need to do extra work to generate this "src.o" and hide it from the original compilation process.
             (objFile, bcFile) = af.getArtifactNames(srcFile, hidden)
             if hidden:
-                builder.buildObjectFile(srcFile, objFile)
+                rc = builder.buildObjectFile(srcFile, objFile)
+                if rc != 0:
+                    #Try next src file instead of giving up and returning error - it's a best-effort process.
+                    continue
                 newObjectFiles.append(objFile)
-
+            else:
+                #TODO: we need to ensure "objFile" has been generated by the raw compilation process..
+                pass
+            #At this point, we must ensure that "objFile" exists, generated either by us (i.e., the "hidden" obj file for the single src),
+            #or by the raw compilation process, w/o the "objFile" we cannot proceed since we need to attach the bitcode file to it..
             if srcFile.endswith('.bc'):
                 _logger.debug('attaching %s to %s', srcFile, objFile)
+                #This can fail but we will ignore it and continue to process other src files.
                 attachBitcodePathToObject(srcFile, objFile)
             else:
                 _logger.debug('building and attaching %s to %s', bcFile, objFile)
-                builder.buildBitcodeFile(srcFile, bcFile)
-                attachBitcodePathToObject(bcFile, objFile)
-
-
-    if not af.isCompileOnly:
-        linkFiles(builder, newObjectFiles)
-
-    sys.exit(0)
+                rc = builder.buildBitcodeFile(srcFile, bcFile)
+                if rc == 0:
+                    #Successfully generate the bc, attach it to the related object file.
+                    #Again this may fail but we will ignore it.
+                    attachBitcodePathToObject(bcFile, objFile)
+        if hidden:
+            #Well we have generated single ".o"s for single src files, also we attached single ".bc"s to the related ".o",
+            #now we will link these ".o" together to replace the unified ".o" generated by the raw compilation process,
+            #which doesn't have the bc path information stored within it.
+            linkFiles(builder, newObjectFiles)
+    return 0
 
 def linkFiles(builder, objectFiles):
     af = builder.getBitcodeArglistFilter()
@@ -450,7 +463,7 @@ def linkFiles(builder, objectFiles):
     rc = proc.wait()
     if rc != 0:
         _logger.warning('Failed to link "%s"', str(cc))
-        sys.exit(rc)
+    return rc
 
 # bd & iam:
 #
