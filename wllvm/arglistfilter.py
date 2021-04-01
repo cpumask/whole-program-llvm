@@ -229,11 +229,15 @@ class ArgumentListFilter(object):
             # Update: found a fix for problem 1: add flag -keep_private_externs when
             # calling ld -r.
             #
-            '-Wl,-dead_strip' :  (0, ArgumentListFilter.warningLinkUnaryCallback),
-            '-dead_strip' :  (0, ArgumentListFilter.warningLinkUnaryCallback),
+            '-Wl,-dead_strip' :  (0, ArgumentListFilter.forbiddenArgCallback),
+            '-dead_strip' :  (0, ArgumentListFilter.forbiddenArgCallback),
             '-Oz' : (0, ArgumentListFilter.compileUnaryCallback),   #did not find this in the GCC options.
             '-mno-global-merge' : (0, ArgumentListFilter.compileUnaryCallback),  #clang (do not merge globals)
 
+            #Some extra unsupported args of clang..
+            '-mskip-rax-setup' : (0, ArgumentListFilter.badClangArgCallback),
+            '-fno-var-tracking-assignments' : (0, ArgumentListFilter.badClangArgCallback),
+            '-fconserve-stack' : (0, ArgumentListFilter.badClangArgCallback),
         }
 
         #
@@ -289,6 +293,9 @@ class ArgumentListFilter(object):
             #iam: -xc from yices. why BD?
             r'^-x.+$' : (0, ArgumentListFilter.compileUnaryCallback),
 
+            #some unsupported args for clang..
+            r'^-mpreferred-stack-boundary=.*$' : (0, ArgumentListFilter.badClangArgCallback),
+            r'^-mno-fp-ret-in-.+$' : (0, ArgumentListFilter.badClangArgCallback),
         }
 
         #iam: try and keep track of the files, input object, and output
@@ -306,6 +313,8 @@ class ArgumentListFilter(object):
         self.opt = None
         #hz: record all -Werror* options, we may choose to disable all of them to increase the compilation success probability.
         self.werrorArgs = []
+        #hz: record args that may not be supported by clang
+        self.badClangArgs = []
 
         self.isVerbose = False
         self.isDependencyOnly = False
@@ -355,7 +364,6 @@ class ArgumentListFilter(object):
                 if not matched:
                     # _logger.warning('Did not recognize the compiler flag "%s"', currentItem)
                     self.compileUnaryCallback(currentItem)
-
         if DUMPING:
             self.dump()
 
@@ -449,16 +457,26 @@ class ArgumentListFilter(object):
         self.compileUnaryCallback(flag)
         self.opt = flag
 
-    def warningLinkUnaryCallback(self, flag):
-        _logger.debug('warningLinkUnaryCallback: %s', flag)
+    def forbiddenArgCallback(self, flag):
+        _logger.debug('forbiddenArgCallback: %s', flag)
         _logger.warning('The flag "%s" cannot be used with this tool; we are ignoring it', flag)
         self.forbiddenArgs.append(flag)
 
     #hz: try best to make the compilation successful...
     def werrorCallback(self, flag):
         _logger.debug('werrorCallback: %s', flag)
-        self.compileUnaryCallback(flag)
+        #Though we want to specialy record it, Werror related args are still normal compile args.
+        self.compileArgs.append(flag)
         self.werrorArgs.append(flag)
+
+    def badClangArgCallback(self, flag, *args):
+        _logger.debug('badClangArgCallback: %s %s', flag, ' '.join(args))
+        #Though this may not be supported by clang, we still need to record it as normal compile args which may be used by the raw compiler.
+        self.compileArgs.append(flag)
+        self.badClangArgs.append(flag)
+        for a in args:
+            self.compileArgs.append(a)
+            self.badClangArgs.append(a)
 
     def defaultBinaryCallback(self, flag, arg):
         _logger.warning('Ignoring compiler arg pair: "%s %s"', flag, arg)
@@ -515,12 +533,29 @@ class ArgumentListFilter(object):
         bcbase = '.{0}.o.bc'.format(srcroot)
         return [objbase, bcbase]
 
-    # HZ: return the options used for compilation, if werror = False the -Werror* options will be excluded.
-    def getCompileArgs(self, werror = True):
+    # HZ: return the options used for compilation.
+    def getCompileArgs(self):
         args = list(self.compileArgs)
-        if not werror:
-            for we in self.werrorArgs:
-                args.remove(we)
+        return args
+
+    # HZ: raw compile args - unsupported args for clang
+    def getClangCompileArgs(self):
+        args = list(self.compileArgs)
+        pos = 0
+        for baddy in self.badClangArgs:
+            try:
+                #To start the search from the previous match position is important to deal with non-unary bad args, e.g.,
+                #baddy: [f0 a0 a1], where "a0" appears multiple times in the compile args - we must deremove the correct "a0" just behind the "f0".
+                pos = args.index(baddy,pos)
+                args.pop(pos)
+            except:
+                if pos != 0:
+                    #This cannot trigger the exception since bad clang arg must also exist in the compile arg list.
+                    pos = args.index(baddy)
+                    args.pop(pos)
+                else:
+                    #The bad arg doesn't exist, that's impossible...
+                    raise Exception("Cannot locate bad clang arg in the normal compile args!!")
         return args
 
     #iam: for printing our partitioning of the args

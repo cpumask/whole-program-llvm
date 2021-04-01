@@ -27,14 +27,9 @@ def run(cmd):
 #kick out all options that try to emit extra warnings or turn warnings into errors. 
 def kickWE(cmd):
     ncmd = []
-    suppress_warns = False
     for c in cmd:
-        if c.startswith('-Werror'):
+        if c.startswith('-Werror') or c == '-Wall':
             continue
-        if c == '-Wall':
-            continue
-        if c == '-w':
-            suppress_warns = True
         ncmd.append(c)
     cmd *= 0
     cmd.extend(ncmd)
@@ -47,8 +42,8 @@ def kickWE(cmd):
     cmd.insert(0,'-Wno-division-by-zero')
     cmd.insert(0,'-Wno-initializer-overrides')
     cmd.insert(0,'-Wno-unknown-warning-option')
-    if not suppress_warns:
-        cmd.insert(0,'-w')
+    #Suppress all warnings
+    cmd.insert(0,'-w')
 
 def wcompile(mode):
     """ The workhorse, called from wllvm and wllvm++.
@@ -229,6 +224,7 @@ class BuilderBase(object):
         # since lower opt level will in general make the program analysis easier.
         self.uopt = os.getenv('WLLVM_BC_OPT_LVL')
 
+    #HZ: raw args - forbidden args (even for raw compilation process) defined by wllvm author - Werror related args
     def getCommand(self):
         if (not self.cmd_filtered) and (self.af is not None):
             # need to remove things like "-dead_strip"
@@ -272,7 +268,7 @@ class BuilderBase(object):
     def buildObjectFile(self, srcFile, objFile):
         af = self.getBitcodeArglistFilter()
         cc = [self.raw_compiler] if self.raw_compiler else self.getCompiler()
-        cc.extend(af.getCompileArgs(False))
+        cc.extend(af.getCompileArgs())
         cc.extend(['-c', srcFile, '-o', objFile])
         rc = run(cc)
         _logger.debug('Builder::buildObjectFile: [%s], rc = %d', ' '.join(cc), rc)
@@ -284,8 +280,7 @@ class BuilderBase(object):
     def buildBitcodeFile(self, srcFile, bcFile):
         af = self.getBitcodeArglistFilter()
         bcc = self.getBitcodeCompiler()
-        #HZ: here we disable all -Werror* options to try best to get the bc.
-        bcc.extend(af.getCompileArgs(False))
+        bcc.extend(af.getClangCompileArgs())
         #be sure to generate dbg info..
         bcc.extend(['-g'])
         #Src and dst
