@@ -96,8 +96,6 @@ class ArgumentListFilter(object):
             '-miamcu': (0, ArgumentListFilter.compileUnaryCallback),
             '-mstackrealign': (0, ArgumentListFilter.compileUnaryCallback),
             '-mretpoline-external-thunk': (0, ArgumentListFilter.compileUnaryCallback),  #iam: linux kernel stuff
-            '-mno-fp-ret-in-387': (0, ArgumentListFilter.compileUnaryCallback),          #iam: linux kernel stuff
-            '-mskip-rax-setup': (0, ArgumentListFilter.compileUnaryCallback),            #iam: linux kernel stuff
             '-mindirect-branch-register': (0, ArgumentListFilter.compileUnaryCallback),  #iam: linux kernel stuff
             '-mlittle-endian': (0, ArgumentListFilter.compileUnaryCallback),  #hz: linux kernel stuff
             '-mno-implicit-float': (0, ArgumentListFilter.compileUnaryCallback),  #hz: linux kernel stuff
