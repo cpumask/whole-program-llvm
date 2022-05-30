@@ -241,6 +241,7 @@ class ArgumentListFilter(object):
             '-mindirect-branch-register' : (0, ArgumentListFilter.badClangArgCallback),
             '-mrecord-mcount' : (0, ArgumentListFilter.badClangArgCallback),
             '-mindirect-branch=thunk-extern' : (0, ArgumentListFilter.badClangArgCallback),
+            '-fno-tree-loop-im' : (0, ArgumentListFilter.badClangArgCallback),
         }
 
         #
