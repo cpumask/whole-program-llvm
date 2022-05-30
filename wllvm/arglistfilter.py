@@ -236,6 +236,11 @@ class ArgumentListFilter(object):
             '-mskip-rax-setup' : (0, ArgumentListFilter.badClangArgCallback),
             '-fno-var-tracking-assignments' : (0, ArgumentListFilter.badClangArgCallback),
             '-fconserve-stack' : (0, ArgumentListFilter.badClangArgCallback),
+            '-fno-ipa-cp-clone' : (0, ArgumentListFilter.badClangArgCallback),
+            '-fno-partial-inlining' : (0, ArgumentListFilter.badClangArgCallback),
+            '-mindirect-branch-register' : (0, ArgumentListFilter.badClangArgCallback),
+            '-mrecord-mcount' : (0, ArgumentListFilter.badClangArgCallback),
+            '-mindirect-branch=thunk-extern' : (0, ArgumentListFilter.badClangArgCallback),
         }
 
         #
