@@ -22,7 +22,7 @@ from .filetype import FileType
 
 from .logconfig import logConfig, informUser
 
-import utils
+from . import utils
 
 
 

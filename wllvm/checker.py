@@ -16,7 +16,7 @@ import errno
 from .version import wllvm_version, wllvm_date
 from .logconfig import loggingConfiguration
 
-import utils
+from . import utils
 
 explain_LLVM_COMPILER = """
 

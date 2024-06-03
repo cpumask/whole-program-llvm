@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 
-import utils
+from . import utils
 
 # iam: 6/30/2017 decided to move to a gllvm style where we can set the level and the output file
 _loggingEnvLevel_old = 'WLLVM_OUTPUT'

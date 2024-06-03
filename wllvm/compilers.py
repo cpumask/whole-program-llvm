@@ -14,7 +14,7 @@ from .arglistfilter import ArgumentListFilter
 
 from .logconfig import logConfig
 
-import utils
+from . import utils
 
 # Internal logger
 _logger = logConfig(__name__)
