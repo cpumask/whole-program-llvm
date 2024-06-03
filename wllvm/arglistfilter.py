@@ -244,6 +244,11 @@ class ArgumentListFilter(object):
             '-mindirect-branch=thunk-inline' : (0, ArgumentListFilter.badClangArgCallback),
             '-fno-tree-loop-im' : (0, ArgumentListFilter.badClangArgCallback),
             '-fsched-pressure' : (0, ArgumentListFilter.badClangArgCallback),
+
+            #Clang 14 raises errors for '-ftrivial-auto-var-init=zero'
+            #clang-14: error: '-ftrivial-auto-var-init=zero' hasn't been enabled; enable it at your own peril
+            #for benchmarking purpose only with '-enable-trivial-auto-var-init-zero-knowing-it-will-be-removed-from-clang'
+            '-ftrivial-auto-var-init=zero' : (0, ArgumentListFilter.badClangArgCallback),
         }
 
         #
