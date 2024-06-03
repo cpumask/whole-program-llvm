@@ -17,6 +17,7 @@ def getarg(name):
     return local_configs.get(name, None)
 
 def strip_quotes(s):
+    s = s.strip()
     if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
         s = s[1:-1]
     return s
