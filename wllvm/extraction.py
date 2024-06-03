@@ -22,6 +22,8 @@ from .filetype import FileType
 
 from .logconfig import logConfig, informUser
 
+import utils
+
 
 
 _logger = logConfig(__name__)
@@ -62,7 +64,7 @@ def getSectionSizeAndOffset(sectionName, filename):
     extracts thesize and offset of that section (in bytes).
     """
 
-    binUtilsTargetPrefix = os.getenv(binutilsTargetPrefixEnv)
+    binUtilsTargetPrefix = utils.getarg(binutilsTargetPrefixEnv)
     objdumpBin = '{}-{}'.format(binUtilsTargetPrefix, 'objdump') if binUtilsTargetPrefix else 'objdump'
     objdumpCmd = [objdumpBin, '-h', '-w', filename]
     objdumpProc = Popen(objdumpCmd, stdout=sp.PIPE)
@@ -159,7 +161,7 @@ def extract_section_linux(inputFile):
 
 
 def getStorePath(bcPath):
-    storeEnv = os.getenv('WLLVM_BC_STORE')
+    storeEnv = utils.getarg('WLLVM_BC_STORE')
     if storeEnv:
         hashName = getHashedPathName(bcPath)
         hashPath = os.path.join(storeEnv, hashName)
@@ -549,18 +551,18 @@ class ExtractedArgs(object):
 def extract_bc_args():
 
     # do we need a path in front?
-    llvmToolPrefix = os.getenv(llvmCompilerPathEnv)
+    llvmToolPrefix = utils.getarg(llvmCompilerPathEnv)
     if not llvmToolPrefix:
         llvmToolPrefix = ''
 
     # is our linker called something different?
-    llvmLinkerName = os.getenv('LLVM_LINK_NAME')
+    llvmLinkerName = utils.getarg('LLVM_LINK_NAME')
     if not llvmLinkerName:
         llvmLinkerName = 'llvm-link'
     llvmLinker = os.path.join(llvmToolPrefix, llvmLinkerName)
 
     # is our archiver called something different?
-    llvmArchiverName = os.getenv('LLVM_AR_NAME')
+    llvmArchiverName = utils.getarg('LLVM_AR_NAME')
     if not llvmArchiverName:
         llvmArchiverName = 'llvm-ar'
     llvmArchiver = os.path.join(llvmToolPrefix, llvmArchiverName)

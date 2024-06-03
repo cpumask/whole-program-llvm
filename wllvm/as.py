@@ -42,6 +42,8 @@ from .arglistfilter import ArgumentListFilter
 
 from .logconfig import logConfig
 
+import utils
+
 # Internal logger
 _logger = logConfig(__name__)
 
@@ -74,8 +76,8 @@ def main():
 
     # set llvm-as
     llvmAssembler = 'llvm-as'
-    if os.getenv(llvmCompilerPathEnv):
-        llvmAssembler = os.path.join(os.getenv(llvmCompilerPathEnv), llvmAssembler)
+    if utils.getarg(llvmCompilerPathEnv):
+        llvmAssembler = os.path.join(utils.getarg(llvmCompilerPathEnv), llvmAssembler)
 
     # Now compile this llvm assembly file into a bitcode file.  The output
     # filename is the same as the object with a .bc appended

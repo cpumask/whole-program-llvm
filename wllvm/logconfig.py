@@ -7,6 +7,8 @@ import logging
 import os
 import sys
 
+import utils
+
 # iam: 6/30/2017 decided to move to a gllvm style where we can set the level and the output file
 _loggingEnvLevel_old = 'WLLVM_OUTPUT'
 _loggingEnvLevel_new = 'WLLVM_OUTPUT_LEVEL'
@@ -17,7 +19,7 @@ _validLogLevels = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
 
 def logConfig(name):
 
-    destination = os.getenv(_loggingDestination)
+    destination = utils.getarg(_loggingDestination)
 
     if destination:
         logging.basicConfig(filename=destination, level=logging.WARNING, format='%(levelname)s:%(message)s')
@@ -27,7 +29,7 @@ def logConfig(name):
     retval = logging.getLogger(name)
 
     # ignore old setting
-    level = os.getenv(_loggingEnvLevel_new)
+    level = utils.getarg(_loggingEnvLevel_new)
 
     if level:
         level = level.upper()
@@ -47,8 +49,8 @@ def logConfig(name):
     return retval
 
 def loggingConfiguration():
-    destination = os.getenv(_loggingDestination)
-    level = os.getenv(_loggingEnvLevel_new)
+    destination = utils.getarg(_loggingDestination)
+    level = utils.getarg(_loggingEnvLevel_new)
     return (destination, level)
 
 

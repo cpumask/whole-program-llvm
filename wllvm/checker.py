@@ -16,6 +16,8 @@ import errno
 from .version import wllvm_version, wllvm_date
 from .logconfig import loggingConfiguration
 
+import utils
+
 explain_LLVM_COMPILER = """
 
 The environment variable 'LLVM_COMPILER' is a switch. It should either
@@ -77,7 +79,7 @@ then LLVM_AR_NAME should be set to llvm-ar-3.5.
 
 class Checker(object):
     def __init__(self):
-        path = os.getenv('LLVM_COMPILER_PATH')
+        path = utils.getarg('LLVM_COMPILER_PATH')
 
         if path and path[-1] != os.path.sep:
             path = path + os.path.sep
@@ -134,7 +136,7 @@ class Checker(object):
 
     def checkSwitch(self):
         """Checks the correctness of the LLVM_COMPILER env var."""
-        compiler_type = os.getenv('LLVM_COMPILER')
+        compiler_type = utils.getarg('LLVM_COMPILER')
         if compiler_type == 'clang':
             return (1, '\nWe are using clang.\n')
         elif compiler_type == 'dragonegg':
@@ -144,8 +146,8 @@ class Checker(object):
 
     def checkClang(self):
         """Checks for clang and clang++."""
-        cc_name = os.getenv('LLVM_CC_NAME')
-        cxx_name = os.getenv('LLVM_CXX_NAME')
+        cc_name = utils.getarg('LLVM_CC_NAME')
+        cxx_name = utils.getarg('LLVM_CXX_NAME')
 
         cc = '{0}{1}'.format(self.path, cc_name if cc_name else 'clang')
         cxx = '{0}{1}'.format(self.path, cxx_name if cxx_name else 'clang++')
@@ -159,8 +161,8 @@ class Checker(object):
             return False
 
         pfx = ''
-        if os.getenv('LLVM_GCC_PREFIX') is not None:
-            pfx = os.getenv('LLVM_GCC_PREFIX')
+        if utils.getarg('LLVM_GCC_PREFIX') is not None:
+            pfx = utils.getarg('LLVM_GCC_PREFIX')
 
         cc = '{0}{1}gcc'.format(self.path, pfx)
         cxx = '{0}{1}g++'.format(self.path, pfx)
@@ -170,7 +172,7 @@ class Checker(object):
 
     def checkDragoneggPlugin(self):
         """Checks for the dragonegg plugin."""
-        plugin = os.getenv('LLVM_DRAGONEGG_PLUGIN')
+        plugin = utils.getarg('LLVM_DRAGONEGG_PLUGIN')
 
         if not plugin:
             print(explain_LLVM_DRAGONEGG_PLUGIN)
@@ -253,8 +255,8 @@ class Checker(object):
 
     def checkAuxiliaries(self):
         """Checks for the archiver and linker."""
-        link_name = os.getenv('LLVM_LINK_NAME')
-        ar_name = os.getenv('LLVM_AR_NAME')
+        link_name = utils.getarg('LLVM_LINK_NAME')
+        ar_name = utils.getarg('LLVM_AR_NAME')
 
         if not link_name:
             link_name = 'llvm-link'
@@ -284,7 +286,7 @@ class Checker(object):
 
     def checkStore(self):
         """Checks that the bitcode store, if set, makes sense."""
-        store_dir = os.getenv('WLLVM_BC_STORE')
+        store_dir = utils.getarg('WLLVM_BC_STORE')
         if store_dir:
             if os.path.exists(store_dir) and os.path.isdir(store_dir) and os.path.isabs(store_dir):
                 print('Using the bitcode store:\n\n\t{0}\n\n'.format(store_dir))

@@ -14,6 +14,8 @@ from .arglistfilter import ArgumentListFilter
 
 from .logconfig import logConfig
 
+import utils
+
 # Internal logger
 _logger = logConfig(__name__)
 
@@ -164,7 +166,7 @@ def attachBitcodePathToObject(bcPath, outFileName):
     os.fsync(f.fileno())
     f.close()
 
-    binUtilsTargetPrefix = os.getenv(binutilsTargetPrefixEnv)
+    binUtilsTargetPrefix = utils.getarg(binutilsTargetPrefixEnv)
 
     # Now write our bitcode section
     if sys.platform.startswith('darwin'):
@@ -177,7 +179,7 @@ def attachBitcodePathToObject(bcPath, outFileName):
 
     # loicg: If the environment variable WLLVM_BC_STORE is set, copy the bitcode
     # file to that location, using a hash of the original bitcode path as a name
-    storeEnv = os.getenv('WLLVM_BC_STORE')
+    storeEnv = utils.getarg('WLLVM_BC_STORE')
     if storeEnv:
         hashName = getHashedPathName(absBcPath)
         copyfile(absBcPath, os.path.join(storeEnv, hashName))
@@ -218,11 +220,11 @@ class BuilderBase(object):
             self.prefixPath = ''
 
         # HZ: Record the raw compiler used before wllvm replacement, if any.
-        self.raw_compiler = os.getenv('WLLVM_RAW_COMPILER')
+        self.raw_compiler = utils.getarg('WLLVM_RAW_COMPILER')
         # HZ: Record the user expected optmization level for the "bc", if any.  
         # we try to give users the opportunity to specify a different opt level (than that used in the original cmd) for bc generation,
         # since lower opt level will in general make the program analysis easier.
-        self.uopt = os.getenv('WLLVM_BC_OPT_LVL')
+        self.uopt = utils.getarg('WLLVM_BC_OPT_LVL')
 
     #HZ: raw args - forbidden args (even for raw compilation process) defined by wllvm author - Werror related args
     def getCommand(self):
@@ -307,7 +309,7 @@ class ClangBuilder(BuilderBase):
     def getBitcodeGenerationFlags(self):
         # iam: If the environment variable LLVM_BITCODE_GENERATION_FLAGS is set we will add them to the
         # bitcode generation step
-        bitcodeFLAGS  = os.getenv('LLVM_BITCODE_GENERATION_FLAGS')
+        bitcodeFLAGS  = utils.getarg('LLVM_BITCODE_GENERATION_FLAGS')
         if bitcodeFLAGS:
             return bitcodeFLAGS.split()
         return []
@@ -325,7 +327,7 @@ class ClangBuilder(BuilderBase):
             env, prog = 'LLVM_F77_NAME', 'flang'
         else:
             raise Exception("Unknown mode {0}".format(self.mode))
-        return ['{0}{1}'.format(self.prefixPath, os.getenv(env) or prog)]
+        return ['{0}{1}'.format(self.prefixPath, utils.getarg(env) or prog)]
 
     def getBitcodeArglistFilter(self):
         if self.af is None:
@@ -334,7 +336,7 @@ class ClangBuilder(BuilderBase):
 
 class DragoneggBuilder(BuilderBase):
     def getBitcodeCompiler(self):
-        pth = os.getenv('LLVM_DRAGONEGG_PLUGIN')
+        pth = utils.getarg('LLVM_DRAGONEGG_PLUGIN')
         cc = self.getCompiler()
         # We use '-B' to tell gcc where to look for an assembler.
         # When we build LLVM bitcode we do not want to use the GNU assembler,
@@ -345,8 +347,8 @@ class DragoneggBuilder(BuilderBase):
 
     def getCompiler(self):
         pfx = ''
-        if os.getenv('LLVM_GCC_PREFIX') is not None:
-            pfx = os.getenv('LLVM_GCC_PREFIX')
+        if utils.getarg('LLVM_GCC_PREFIX') is not None:
+            pfx = utils.getarg('LLVM_GCC_PREFIX')
 
         if self.mode == "wllvm++":
             mode = 'g++'
@@ -365,8 +367,8 @@ class DragoneggBuilder(BuilderBase):
 
 def getBuilder(cmd, mode):
     compilerEnv = 'LLVM_COMPILER'
-    cstring = os.getenv(compilerEnv)
-    pathPrefix = os.getenv(llvmCompilerPathEnv) # Optional
+    cstring = utils.getarg(compilerEnv)
+    pathPrefix = utils.getarg(llvmCompilerPathEnv) # Optional
 
     _logger.debug('WLLVM compiler using %s', cstring)
     if pathPrefix:
