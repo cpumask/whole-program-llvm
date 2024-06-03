@@ -286,10 +286,10 @@ class BuilderBase(object):
         #Src and dst
         bcc.extend(['-c', srcFile])
         bcc.extend(['-o', bcFile])
-        if self.uopt and af.opt and self.uopt <> af.opt:
+        if self.uopt and af.opt and self.uopt != af.opt:
             #Try to replace the original opt level w/ the user specified one.
             _logger.debug('Builder::buildBitcodeFile: try to replace original opt level w/ user supplied one: %s -> %s', af.opt, self.uopt)
-            n_bcc = [x if x <> af.opt else self.uopt for x in bcc]
+            n_bcc = [x if x != af.opt else self.uopt for x in bcc]
             rc = run(n_bcc)
             _logger.debug('Builder::buildBitcodeFile: [%s], rc = %d', ' '.join(n_bcc), rc)
             if rc == 0:
