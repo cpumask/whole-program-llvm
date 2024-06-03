@@ -38,6 +38,6 @@ def load_local_config():
                     pass
                 k = ln[7:ind]
                 v = strip_quotes(ln[ind + 1:])
-                local_configs.setdefault(k, "").append(v)
+                local_configs[k] = v
     except FileNotFoundError:
         pass
