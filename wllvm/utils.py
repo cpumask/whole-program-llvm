@@ -42,3 +42,9 @@ def load_local_config():
                 local_configs[k] = v
     except FileNotFoundError:
         pass
+
+def trimBCPath(p):
+    for i in range(len(p)):
+        if not p[i] in ('.', '/'):
+            return p[i:]
+    return ''

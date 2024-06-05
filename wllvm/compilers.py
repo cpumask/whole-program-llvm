@@ -181,8 +181,13 @@ def attachBitcodePathToObject(bcPath, outFileName):
     # file to that location, using a hash of the original bitcode path as a name
     storeEnv = utils.getarg('WLLVM_BC_STORE')
     if storeEnv:
-        hashName = getHashedPathName(absBcPath)
-        copyfile(absBcPath, os.path.join(storeEnv, hashName))
+        #hashName = getHashedPathName(absBcPath)
+        #copyfile(absBcPath, os.path.join(storeEnv, hashName))
+        subPath = utils.trimBCPath(bcPath)
+        dstPath = os.path.join(storeEnv, subPath)
+        # Ensure the destination directory exists
+        os.makedirs(os.path.dirname(dstPath), exist_ok=True)
+        copyfile(absBcPath, dstPath)
 
     try:
         if os.path.getsize(outFileName) > 0:
