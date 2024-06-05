@@ -249,6 +249,11 @@ class ArgumentListFilter(object):
             #clang-14: error: '-ftrivial-auto-var-init=zero' hasn't been enabled; enable it at your own peril
             #for benchmarking purpose only with '-enable-trivial-auto-var-init-zero-knowing-it-will-be-removed-from-clang'
             '-ftrivial-auto-var-init=zero' : (0, ArgumentListFilter.badClangArgCallback),
+
+            #Related to ThinLTO, for program analysis purposes maybe normal LTO is better?
+            '-fno-lto' : (0, ArgumentListFilter.badClangArgCallback),
+            '-flto=thin' : (0, ArgumentListFilter.badClangArgCallback),
+            '-fsplit-lto-unit' : (0, ArgumentListFilter.badClangArgCallback),
         }
 
         #
@@ -307,6 +312,11 @@ class ArgumentListFilter(object):
             #some unsupported args for clang..
             r'^-mpreferred-stack-boundary=.*$' : (0, ArgumentListFilter.badClangArgCallback),
             r'^-mno-fp-ret-in-.+$' : (0, ArgumentListFilter.badClangArgCallback),
+
+            #CFI related stuff, disable CFI in general to produce simpler IR and ".bc" files for analysis.
+            r'^.+=cfi$' : (0, ArgumentListFilter.badClangArgCallback),
+            r'^-fsanitize-cfi-.+$' : (0, ArgumentListFilter.badClangArgCallback),
+            r'^-fnosanitize-cfi-.+$' : (0, ArgumentListFilter.badClangArgCallback),
         }
 
         #iam: try and keep track of the files, input object, and output
