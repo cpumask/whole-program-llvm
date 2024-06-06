@@ -141,6 +141,8 @@ def attachBitcodePathToObject(bcPath, outFileName):
     _logger.debug('attachBitcodePathToObject: %s  ===> %s [ext = %s]', bcPath, outFileName, ext)
 
     #iam: just object files, right?
+    #TODO: this relies on the execution of "file" utility, whose path may not be available in a sandboxed
+    #building environment like Bazel, need to specify the path to the "file" binary.
     fileType = FileType.getFileType(outFileName)
     if fileType not in (FileType.MACH_OBJECT, FileType.ELF_OBJECT):
     #if fileType not in (FileType.MACH_OBJECT, FileType.MACH_SHARED, FileType.ELF_OBJECT, FileType.ELF_SHARED):
@@ -176,18 +178,6 @@ def attachBitcodePathToObject(bcPath, outFileName):
         objcopyBin = '{}-{}'.format(binUtilsTargetPrefix, 'objcopy') if binUtilsTargetPrefix else 'objcopy'
         objcopyCmd = [objcopyBin, '--add-section', '{0}={1}'.format(elfSectionName, f.name), outFileName]
     orc = 0
-
-    # loicg: If the environment variable WLLVM_BC_STORE is set, copy the bitcode
-    # file to that location, using a hash of the original bitcode path as a name
-    storeEnv = utils.getarg('WLLVM_BC_STORE')
-    if storeEnv:
-        #hashName = getHashedPathName(absBcPath)
-        #copyfile(absBcPath, os.path.join(storeEnv, hashName))
-        subPath = utils.trimBCPath(bcPath)
-        dstPath = os.path.join(storeEnv, subPath)
-        # Ensure the destination directory exists
-        os.makedirs(os.path.dirname(dstPath), exist_ok=True)
-        copyfile(absBcPath, dstPath)
 
     try:
         if os.path.getsize(outFileName) > 0:
@@ -411,6 +401,7 @@ def buildAndAttachBitcode(builder, af):
             bcFile = af.getBitcodeFileName()
         rc = builder.buildBitcodeFile(srcFile, bcFile)
         if rc == 0:
+            utils.copyBC(bcFile)
             attachBitcodePathToObject(bcFile, objFile)
     else:
         #iam: when we have multiple input files we'll have to keep track of their object files.
@@ -438,6 +429,7 @@ def buildAndAttachBitcode(builder, af):
             if srcFile.endswith('.bc'):
                 _logger.debug('attaching %s to %s', srcFile, objFile)
                 #This can fail but we will ignore it and continue to process other src files.
+                utils.copyBC(srcFile)
                 attachBitcodePathToObject(srcFile, objFile)
             else:
                 _logger.debug('building and attaching %s to %s', bcFile, objFile)
@@ -445,6 +437,7 @@ def buildAndAttachBitcode(builder, af):
                 if rc == 0:
                     #Successfully generate the bc, attach it to the related object file.
                     #Again this may fail but we will ignore it.
+                    utils.copyBC(bcFile)
                     attachBitcodePathToObject(bcFile, objFile)
         if hidden:
             #Well we have generated single ".o"s for single src files, also we attached single ".bc"s to the related ".o",
