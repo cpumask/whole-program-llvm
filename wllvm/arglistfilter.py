@@ -284,6 +284,13 @@ class ArgumentListFilter(object):
             #hz: (?!...) means "negative look ahead", basically "..." cannot appear at the current position.
             r'^-W(?!(l,|error)).*$' : (0, ArgumentListFilter.compileUnaryCallback),
             #r'^-W(?!l,).*$' : (0, ArgumentListFilter.compileUnaryCallback),
+
+            #CFI related stuff, disable CFI in general to produce simpler IR and ".bc" files for analysis.
+            r'^.+=cfi$' : (0, ArgumentListFilter.badClangArgCallback),
+            r'^-fsanitize-cfi-.+$' : (0, ArgumentListFilter.badClangArgCallback),
+            r'^-fno-sanitize-cfi-.+$' : (0, ArgumentListFilter.badClangArgCallback),
+
+            #Normal stuff cont'd
             r'^-fsanitize=.+$' : (0, ArgumentListFilter.compileLinkUnaryCallback),
             r'^-f.+$' : (0, ArgumentListFilter.compileUnaryCallback),
             r'^-rtlib=.+$' : (0, ArgumentListFilter.linkUnaryCallback),
@@ -298,7 +305,6 @@ class ArgumentListFilter(object):
             r'^-march=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                               #iam: linux kernel stuff
             r'^--param=.+$' : (0, ArgumentListFilter.compileUnaryCallback),                              #iam: linux kernel stuff
 
-
             #iam: mac stuff...
             r'-mmacosx-version-min=.+$' :  (0, ArgumentListFilter.compileUnaryCallback),
 
@@ -312,11 +318,6 @@ class ArgumentListFilter(object):
             #some unsupported args for clang..
             r'^-mpreferred-stack-boundary=.*$' : (0, ArgumentListFilter.badClangArgCallback),
             r'^-mno-fp-ret-in-.+$' : (0, ArgumentListFilter.badClangArgCallback),
-
-            #CFI related stuff, disable CFI in general to produce simpler IR and ".bc" files for analysis.
-            r'^.+=cfi$' : (0, ArgumentListFilter.badClangArgCallback),
-            r'^-fsanitize-cfi-.+$' : (0, ArgumentListFilter.badClangArgCallback),
-            r'^-fnosanitize-cfi-.+$' : (0, ArgumentListFilter.badClangArgCallback),
         }
 
         #iam: try and keep track of the files, input object, and output
